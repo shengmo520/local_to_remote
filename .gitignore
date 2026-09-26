@@ -1,0 +1,5 @@
+# 安卓打包过程中生成的中间产物
+android/assets/
+# 签名证书（只保留在本机，不进版本库）
+android/planapp.keystore
+update/

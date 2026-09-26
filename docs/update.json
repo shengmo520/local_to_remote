@@ -1,0 +1,9 @@
+{
+  "versionCode": 2,
+  "apk": "qingzhu-2.apk",
+  "publishedAt": "2026-09-26 23:59:37",
+  "content": "index.html",
+  "versionName": "1.5",
+  "notes": "1. 应用改名为「青竹计划」\n2. 新增后台提醒：到点弹系统通知，应用关掉、锁屏也能响\n3. 新增检查更新：电脑端发布后，手机打开应用即可提示并直接更新",
+  "contentVersion": 260926235924
+}

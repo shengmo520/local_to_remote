@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 远山 -->
+    <path
+        android:fillAlpha="0.45"
+        android:fillColor="#FFFFFF"
+        android:pathData="M22,78 L35,58 L45,70 L55,56 L70,78 Z" />
+    <!-- 主峰 -->
+    <path
+        android:fillColor="#EAF3E4"
+        android:pathData="M43,80 L61,44 L79,80 Z" />
+    <!-- 竹节 -->
+    <path
+        android:fillColor="#9CC79B"
+        android:pathData="M29,30 h6 v8 h-6 z M29,42 h6 v8 h-6 z M29,54 h6 v8 h-6 z" />
+</vector>

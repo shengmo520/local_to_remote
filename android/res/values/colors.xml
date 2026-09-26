@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 宣纸 -->
+    <color name="window_bg">#F3EFE4</color>
+    <!-- 竹青 -->
+    <color name="ic_launcher_background">#2F5D46</color>
+</resources>
