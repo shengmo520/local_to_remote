@@ -49,7 +49,8 @@ New-Item -ItemType File -Force -Path (Join-Path $DOCS '.nojekyll') | Out-Null
 
 Push-Location $PROJ
 try {
-    git add -f docs 2>$null
+    # 注意：不要用 -f，否则会把 .gitignore 排除的签名私钥和构建产物也加进去
+    git add docs index.html android 2>$null
     git -c user.name=shengmo520 -c user.email=168434781+shengmo520@users.noreply.github.com `
         commit -m "publish: 更新内容 $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>$null
     if ($LASTEXITCODE -ne 0) {
@@ -61,14 +62,22 @@ try {
         git push $Remote $Branch
         if ($LASTEXITCODE -eq 0) {
             "已推送到 $Remote/$Branch"
-            # jsDelivr 对分支文件有最长 12 小时缓存，推完主动刷新一次，更新就能立刻生效
+            # jsDelivr 对分支文件有最长 12 小时缓存，推完主动刷新，让更新立刻生效
             if ($UpdateUrl -like 'https://cdn.jsdelivr.net/*') {
-                $purge = ($UpdateUrl -replace '^https://cdn\.jsdelivr\.net/', 'https://purge.jsdelivr.net/') + 'update.json'
-                try {
-                    Invoke-RestMethod -Uri $purge -TimeoutSec 25 | Out-Null
-                    "已刷新 jsDelivr 缓存（更新立刻生效）"
-                } catch {
-                    "缓存刷新没成功，最长 12 小时后也会自动生效"
+                $purgeBase = $UpdateUrl -replace '^https://cdn\.jsdelivr\.net/', 'https://purge.jsdelivr.net/'
+                $apkFile = (Get-Content (Join-Path $DOCS 'update.json') -Raw | ConvertFrom-Json).apk
+                foreach ($f in @('update.json', 'index.html', 'download.html', $apkFile)) {
+                    $okFile = $false
+                    for ($try = 1; $try -le 3 -and -not $okFile; $try++) {
+                        try {
+                            Invoke-RestMethod -Uri ($purgeBase + $f) -TimeoutSec 60 | Out-Null
+                            "已刷新缓存：$f"
+                            $okFile = $true
+                        } catch {
+                            if ($try -lt 3) { Start-Sleep -Seconds 3 }
+                        }
+                    }
+                    if (-not $okFile) { "刷新 $f 没成功（最长 12 小时后也会自动生效）" }
                 }
             }
         } else {
