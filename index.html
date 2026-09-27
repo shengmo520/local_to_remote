@@ -589,8 +589,10 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   var PAGE_BUILD = "__BUILD__";
   // 打包时会被替换成电脑的局域网更新地址，省得在手机上手动输入
   var DEFAULT_UPDATE_URL = "__UPDATE_URL__";
-  // 打包时会写入电脑的局域网地址；源码直接打开时是占位符，按空处理
-  var BUILTIN_UPDATE_URL = (DEFAULT_UPDATE_URL === "__UPDATE_URL__") ? "" : DEFAULT_UPDATE_URL;
+  // 公网更新源：写在页面里，即使 APK 内置的是内网地址也能自动升级到这个地址
+  var CLOUD_UPDATE_URL = "https://cdn.jsdelivr.net/gh/shengmo520/qingzhu-plan@main/docs/";
+  // 打包时 __UPDATE_URL__ 会被换成实际地址；源码直接打开时用公网地址兜底
+  var BUILTIN_UPDATE_URL = (DEFAULT_UPDATE_URL === "__UPDATE_URL__") ? CLOUD_UPDATE_URL : DEFAULT_UPDATE_URL;
   // 判断是不是内网地址（这类地址只能在同一个 WiFi 下更新）
   function isLanUrl(url){
     var m = /^https?:\/\/([^\/:]+)/i.exec(String(url || ""));
@@ -991,6 +993,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   var openGoalId = null;
   var settingsOpen = false;
   var sampleOpen = false;      // 有自己目标后，示例默认折叠
+  var updateUrlEditing = false; // 有内置公网地址时，默认不显示输入框
   var activeReminders = [];
   var themeOverride = null;
   var paletteOverride = null;
@@ -1813,12 +1816,16 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
         '<div class="row-sub" style="margin-top:4px">原生记录的已下载内容：' + (contentVer || "—") + '</div>' +
         (state.settings.updateMsg ? '<div class="row-sub" style="margin-top:8px;color:var(--accent)">' + esc(state.settings.updateMsg) + '</div>' : '') +
         (shell
-          ? '<div class="field" style="margin:14px 0 0"><span class="field-label">更新地址</span>' +
-              '<input type="text" data-update-url value="' + esc(state.settings.updateUrl || "") + '" placeholder="http://192.168.1.5:8080/" /></div>' +
-            (isLanUrl(state.settings.updateUrl)
-              ? '<div class="row-sub" style="margin-top:8px;color:var(--warn)">这是内网地址，只有手机和电脑连同一个 WiFi 时才能更新。装最新版 APK 会自动换成公网地址。</div>'
-              : "") +
-            '<div class="row-sub" style="margin-top:10px">在电脑上运行 android\\serve.ps1，把显示出来的地址填到这里。填好后每次电脑端发布新版本，手机打开应用就会提示更新。</div>' +
+          ? (isLanUrl(state.settings.updateUrl) || updateUrlEditing
+              ? '<div class="field" style="margin:14px 0 0"><span class="field-label">更新地址</span>' +
+                  '<input type="text" data-update-url value="' + esc(state.settings.updateUrl || "") + '" placeholder="https://" /></div>' +
+                (isLanUrl(state.settings.updateUrl)
+                  ? '<div class="row-sub" style="margin-top:8px;color:var(--warn)">这是内网地址，只有手机和电脑连同一个 WiFi 时才能更新。</div>'
+                  : "") +
+                '<div class="row-sub" style="margin-top:8px">留空则使用内置的更新地址。</div>'
+              : '<div class="row-sub" style="margin-top:12px">更新地址已内置，不用设置：</div>' +
+                '<div class="row-sub" style="margin-top:4px;word-break:break-all">' + esc(state.settings.updateUrl) + '</div>' +
+                '<div class="row-sub" style="margin-top:6px"><button class="link-btn" data-edit-update-url>想换成别的地址</button></div>') +
             '<div class="row-sub" style="margin-top:8px">' + esc(lastCheckText) + '</div>' +
             '<button class="btn ghost block" data-check-update>立即检查更新</button>'
           : '<div class="row-sub" style="margin-top:10px">网页版没有更新功能：直接在电脑上刷新页面就是最新版。</div>') +
@@ -2182,6 +2189,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     }
     if(t.closest("[data-export]")){ doExport(); return; }
     if(t.closest("[data-check-update]")){ checkUpdate(true); return; }
+    if(t.closest("[data-edit-update-url]")){ updateUrlEditing = true; render(); return; }
     if(t.closest("[data-clear-samples]")){
       var nSamples = sampleGoals().length;
       if(!nSamples) return;
