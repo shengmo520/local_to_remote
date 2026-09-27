@@ -586,11 +586,22 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   var CARD_TASK_LIMIT = 3;
   var APP_VERSION = "v1.5";
   // 打包时会被替换成实际构建号，用来判断「手机上跑的页面到底是哪一版」
-  var PAGE_BUILD = "260927002718";
+  var PAGE_BUILD = "260927113111";
   // 打包时会被替换成电脑的局域网更新地址，省得在手机上手动输入
   var DEFAULT_UPDATE_URL = "https://cdn.jsdelivr.net/gh/shengmo520/qingzhu-plan@main/docs/";
   // 打包时会写入电脑的局域网地址；源码直接打开时是占位符，按空处理
   var BUILTIN_UPDATE_URL = (DEFAULT_UPDATE_URL === "https://cdn.jsdelivr.net/gh/shengmo520/qingzhu-plan@main/docs/") ? "" : DEFAULT_UPDATE_URL;
+  // 判断是不是内网地址（这类地址只能在同一个 WiFi 下更新）
+  function isLanUrl(url){
+    var m = /^https?:\/\/([^\/:]+)/i.exec(String(url || ""));
+    if(!m) return false;
+    var h = m[1].toLowerCase();
+    if(h === "localhost" || h === "127.0.0.1") return true;
+    if(/^10\./.test(h)) return true;
+    if(/^192\.168\./.test(h)) return true;
+    if(/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+    return false;
+  }
 
   /* ==================== 基础工具 ==================== */
   function uid(prefix){
@@ -811,12 +822,16 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     return got === want;
   }
   function normalize(raw){
+    var savedUrl = (raw && raw.settings && raw.settings.updateUrl) || "";
+    // 以前手动填过内网地址、而现在 APK 里内置的是公网地址，就自动换成公网地址，
+    // 免得装了新版本还一直用只能在同一个 WiFi 下生效的旧地址
+    if (BUILTIN_UPDATE_URL && !isLanUrl(BUILTIN_UPDATE_URL) && isLanUrl(savedUrl)) savedUrl = "";
     var out = {
       version: VERSION,
       settings: {
         theme: (raw && raw.settings && raw.settings.theme) || "auto",
         palette: (raw && raw.settings && raw.settings.palette) || "bamboo",
-        updateUrl: (raw && raw.settings && raw.settings.updateUrl) || BUILTIN_UPDATE_URL,
+        updateUrl: savedUrl || BUILTIN_UPDATE_URL,
         lastCheck: (raw && raw.settings && raw.settings.lastCheck) || "",
         updateMsg: (raw && raw.settings && raw.settings.updateMsg) || ""
       },
@@ -1753,7 +1768,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     var lastCheckText = state.settings.lastCheck
       ? ("上次检查：" + state.settings.lastCheck.replace("T", " ").slice(0, 16))
       : "还没有检查过更新";
-    var pageBuild = (PAGE_BUILD === "260927002718") ? "开发版" : PAGE_BUILD;
+    var pageBuild = (PAGE_BUILD === "260927113111") ? "开发版" : PAGE_BUILD;
     return '<div class="screen-inner">' +
       '<div class="screen-head">' +
         '<button class="icon-btn" data-close-settings aria-label="返回">‹</button>' +
@@ -1800,6 +1815,9 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
         (shell
           ? '<div class="field" style="margin:14px 0 0"><span class="field-label">更新地址</span>' +
               '<input type="text" data-update-url value="' + esc(state.settings.updateUrl || "") + '" placeholder="http://192.168.1.5:8080/" /></div>' +
+            (isLanUrl(state.settings.updateUrl)
+              ? '<div class="row-sub" style="margin-top:8px;color:var(--warn)">这是内网地址，只有手机和电脑连同一个 WiFi 时才能更新。装最新版 APK 会自动换成公网地址。</div>'
+              : "") +
             '<div class="row-sub" style="margin-top:10px">在电脑上运行 android\\serve.ps1，把显示出来的地址填到这里。填好后每次电脑端发布新版本，手机打开应用就会提示更新。</div>' +
             '<div class="row-sub" style="margin-top:8px">' + esc(lastCheckText) + '</div>' +
             '<button class="btn ghost block" data-check-update>立即检查更新</button>'
@@ -2626,6 +2644,30 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
         keyResults: [{ title: "我自己定的步骤", actions: [] }]
       }] };
       eq(normalize(mine).goals[0].sample, false);
+    });
+    test("内网地址判定", function(){
+      eq(isLanUrl("http://10.81.83.158:8080/"), true);
+      eq(isLanUrl("http://192.168.1.5:8080/"), true);
+      eq(isLanUrl("http://172.16.0.9/"), true);
+      eq(isLanUrl("http://172.32.0.9/"), false);
+      eq(isLanUrl("http://localhost:8080/"), true);
+      eq(isLanUrl("https://cdn.jsdelivr.net/gh/u/r@main/docs/"), false);
+      eq(isLanUrl(""), false);
+    });
+    test("更新地址迁移：存的是内网地址、内置的是公网地址时自动替换", function(){
+      // 模拟打包后的行为：把内置地址临时改成公网
+      var backup = BUILTIN_UPDATE_URL;
+      BUILTIN_UPDATE_URL = "https://cdn.jsdelivr.net/gh/u/r@main/docs/";
+      var n = normalize({ version: 1, goals: [], settings: { updateUrl: "http://10.81.83.158:8080/" } });
+      eq(n.settings.updateUrl, "https://cdn.jsdelivr.net/gh/u/r@main/docs/");
+      // 用户自己填的公网地址不能被覆盖
+      var n2 = normalize({ version: 1, goals: [], settings: { updateUrl: "https://my.example.com/up/" } });
+      eq(n2.settings.updateUrl, "https://my.example.com/up/");
+      // 内置的也是内网地址时不动（局域网方案）
+      BUILTIN_UPDATE_URL = "http://192.168.1.5:8080/";
+      var n3 = normalize({ version: 1, goals: [], settings: { updateUrl: "http://10.81.83.158:8080/" } });
+      eq(n3.settings.updateUrl, "http://10.81.83.158:8080/");
+      BUILTIN_UPDATE_URL = backup;
     });
     test("日期：剩余天数计算正确", function(){
       var todayK = dayKey();
