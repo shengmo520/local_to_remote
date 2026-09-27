@@ -586,7 +586,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   var CARD_TASK_LIMIT = 3;
   var APP_VERSION = "v1.5";
   // 打包时会被替换成实际构建号，用来判断「手机上跑的页面到底是哪一版」
-  var PAGE_BUILD = "260927133053";
+  var PAGE_BUILD = "260927135831";
   // 打包时会被替换成电脑的局域网更新地址，省得在手机上手动输入
   var DEFAULT_UPDATE_URL = "https://cdn.jsdelivr.net/gh/shengmo520/qingzhu-plan@main/docs/";
   // 公网更新源：写在页面里，即使 APK 内置的是内网地址也能自动升级到这个地址
@@ -660,6 +660,9 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   }
   function fmtDateTimeCn(date){
     return (date.getMonth() + 1) + "月" + date.getDate() + "日 周" + WEEK_CN[date.getDay()];
+  }
+  function fmtClock(date){
+    return pad2(date.getHours()) + ":" + pad2(date.getMinutes());
   }
   function fmtDue(value, todayK){
     var d = parseDueAt(value);
@@ -1381,8 +1384,13 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
       cols[k].addEventListener("click", function(e){
         var item = e.target.closest ? e.target.closest(".dtp-item") : null;
         if(!item) return;
-        try{ cols[k].scrollTo({ top: Number(item.dataset.i) * PICKER_ITEM_H, behavior: "smooth" }); }
-        catch(err){ cols[k].scrollTop = Number(item.dataset.i) * PICKER_ITEM_H; }
+        var want = Number(item.dataset.i) * PICKER_ITEM_H;
+        try{ cols[k].scrollTo({ top: want, behavior: "smooth" }); }
+        catch(err){ cols[k].scrollTop = want; }
+        // 平滑滚动没生效时（部分 WebView / 页面不在前台）直接跳过去
+        setTimeout(function(){
+          if(Math.abs(cols[k].scrollTop - want) > PICKER_ITEM_H / 2) cols[k].scrollTop = want;
+        }, 400);
         if(timers[k]) clearTimeout(timers[k]);
         timers[k] = setTimeout(function(){ onScrollEnd(k); }, 180);
       });
@@ -1773,7 +1781,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     var lastCheckText = state.settings.lastCheck
       ? ("上次检查：" + state.settings.lastCheck.replace("T", " ").slice(0, 16))
       : "还没有检查过更新";
-    var pageBuild = (PAGE_BUILD === "260927133053") ? "开发版" : PAGE_BUILD;
+    var pageBuild = (PAGE_BUILD === "260927135831") ? "开发版" : PAGE_BUILD;
     return '<div class="screen-inner">' +
       '<div class="screen-head">' +
         '<button class="icon-btn" data-close-settings aria-label="返回">‹</button>' +
@@ -1842,13 +1850,19 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   }
 
   /* ==================== 渲染 ==================== */
+  // 顶部那行「9月27日 周日 14:35 · 0 个目标」：只改文字，不整页重绘
+  function updateAppbarDate(){
+    var el = document.getElementById("appbar-date");
+    if(!el) return;
+    var d = new Date();
+    el.textContent = fmtDateTimeCn(d) + " " + fmtClock(d) + " · " + myGoals().length + " 个目标";
+  }
   function render(){
     applyTheme();
     var warn = document.getElementById("storage-warning");
     if(storageOK) warn.classList.add("hidden"); else warn.classList.remove("hidden");
 
-    var appbarDate = document.getElementById("appbar-date");
-    if(appbarDate) appbarDate.textContent = fmtDateTimeCn(new Date()) + " · " + myGoals().length + " 个目标";
+    updateAppbarDate();
 
     var tabs = document.querySelectorAll(".tab");
     for(var i = 0; i < tabs.length; i++){
@@ -1949,6 +1963,15 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
       sheet.style.transform = "translate(0px,0px) scale(1,1)";
       sheet.style.opacity = "1";
     });
+    // 万一 rAF 没被触发（页面在后台、或被系统节流），兜底直接复位，避免面板卡在起点
+    setTimeout(function(){
+      var t = sheet.style.transform || "";
+      if(t.indexOf("scale(1,1)") < 0){
+        sheet.style.transition = "none";
+        sheet.style.transform = "translate(0px,0px) scale(1,1)";
+        sheet.style.opacity = "1";
+      }
+    }, 500);
   }
   function openDetail(goalId, sourceEl){
     if(closeTimer){ clearTimeout(closeTimer); closeTimer = null; }
@@ -2786,6 +2809,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     }
     syncNativeReminders();
     autoCheckUpdate();
+    setInterval(updateAppbarDate, 30000);   // 顶部时间跟着走，不用整页重绘
   }
 
   if(params.get("selftest") === "1") runSelfTest();
