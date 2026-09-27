@@ -59,7 +59,16 @@ try {
         "已提交到本地仓库"
     }
     if ($Push) {
-        git push $Remote $Branch
+        # GitHub 在国内经常直连不上；如果本机有代理（Clash / v2ray 等）就自动走代理
+        $proxyArgs = @()
+        foreach ($p in @(7897, 7890, 7891, 7892, 10809, 10808, 2080, 1080)) {
+            if (netstat -ano | Select-String -Pattern ":$p\s+.*LISTENING") {
+                $proxyArgs = @('-c', "http.proxy=http://127.0.0.1:$p", '-c', "https.proxy=http://127.0.0.1:$p")
+                "检测到本机代理 127.0.0.1:$p，推送时使用它"
+                break
+            }
+        }
+        git @proxyArgs push $Remote $Branch
         if ($LASTEXITCODE -eq 0) {
             "已推送到 $Remote/$Branch"
             # jsDelivr 对分支文件有最长 12 小时缓存，推完主动刷新，让更新立刻生效
