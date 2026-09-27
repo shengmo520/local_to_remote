@@ -90,7 +90,8 @@ try {
                 }
             }
         } else {
-            "推送失败：检查网络或 GitHub 凭据"
+            "推送失败：连不上 GitHub。国内通常需要开着代理（Clash / v2ray 等）再推。"
+            "本地已经提交好了，等网络通了执行：  git push $Remote $Branch"
         }
     } else {
         ""
