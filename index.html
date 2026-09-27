@@ -2390,7 +2390,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     var needContent = Number(info.contentVersion || 0) > cur;
     var needShell = Number(info.versionCode || 0) > sh.code;
     if(!needContent && !needShell){
-      state.settings.updateMsg = "已是最新（远端内容 " + info.contentVersion + "）";
+      state.settings.updateMsg = "已经是最新版本";
       save(); render();
       showMiniToast("已经是最新版本");
       return;
@@ -2732,6 +2732,13 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     }
     if(loaded) state = loaded;
     else { state = seedState(); save(); }
+
+    // 上一次是「正在重启」的话，说明这次就是重启后的那次加载：换成一句完成提示
+    if(String(state.settings.updateMsg || "").indexOf("正在重启") >= 0){
+      state.settings.updateMsg = "";
+      save();
+      showMiniToast("已更新到最新版本");
+    }
 
     render();
 
