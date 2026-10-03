@@ -2416,14 +2416,14 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     updateCheckManual = false;
     if(updateCheckTimer){ clearTimeout(updateCheckTimer); updateCheckTimer = null; }
     if(err || !body){
-      state.settings.updateMsg = "检查失败：" + (err || "没有拿到更新信息");
+      if(manual) state.settings.updateMsg = "检查失败：" + (err || "没有拿到更新信息");
       save(); render();
       if(manual) showMiniToast("检查更新失败：" + (err || "没有拿到更新信息"));
       return;
     }
     var info;
     try{ info = JSON.parse(String(body)); }
-    catch(e){ state.settings.updateMsg = "更新信息格式不正确"; save(); render(); if(manual) showMiniToast("更新信息格式不正确"); return; }
+    catch(e){ if(manual) state.settings.updateMsg = "更新信息格式不正确"; save(); render(); if(manual) showMiniToast("更新信息格式不正确"); return; }
     state.settings.lastCheck = new Date().toISOString();
     state.settings.updateMsg = "";
     save(); render();
@@ -2432,7 +2432,8 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     var needContent = Number(info.contentVersion || 0) > cur;
     var needShell = Number(info.versionCode || 0) > sh.code;
     if(!needContent && !needShell){
-      state.settings.updateMsg = "已经是最新版本";
+      // 自动检查不留下任何「已经是最新版本」的痕迹，只有手动检查才显示
+      state.settings.updateMsg = manual ? "已经是最新版本" : "";
       save(); render();
       if(manual) showMiniToast("已经是最新版本");
       return;
@@ -2443,6 +2444,8 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
       if(autoPromptedKey === key) return;
       autoPromptedKey = key;
     }
+    state.settings.updateMsg = "发现新版本" + (info.versionName ? (" " + info.versionName) : "");
+    save(); render();
     openUpdateSheet(info, needContent, needShell);
   };
   window.__updateContent = function(ok, msg){

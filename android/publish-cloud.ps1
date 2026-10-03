@@ -75,19 +75,28 @@ try {
             if ($UpdateUrl -like 'https://cdn.jsdelivr.net/*') {
                 $purgeBase = $UpdateUrl -replace '^https://cdn\.jsdelivr\.net/', 'https://purge.jsdelivr.net/'
                 $apkFile = (Get-Content (Join-Path $DOCS 'update.json') -Raw | ConvertFrom-Json).apk
-                foreach ($f in @('update.json', 'index.html', 'download.html', $apkFile)) {
-                    $okFile = $false
-                    for ($try = 1; $try -le 3 -and -not $okFile; $try++) {
-                        try {
-                            Invoke-RestMethod -Uri ($purgeBase + $f) -TimeoutSec 60 | Out-Null
-                            "已刷新缓存：$f"
-                            $okFile = $true
-                        } catch {
-                            if ($try -lt 3) { Start-Sleep -Seconds 3 }
-                        }
-                    }
-                    if (-not $okFile) { "刷新 $f 没成功（最长 12 小时后也会自动生效）" }
-                }
+                $purgeList = @('update.json', 'index.html', 'download.html', $apkFile) |
+                    Where-Object { $_ } | ForEach-Object { $purgeBase + $_ }
+                # 用 node 发刷新请求：PowerShell 的 Invoke-RestMethod 在本机经常超时，刷新失败手机就要等最长 12 小时
+                $purgeJs = @'
+const list = JSON.parse(process.argv[1]);
+(async () => {
+  for (const u of list) {
+    let done = false;
+    for (let i = 1; i <= 3 && !done; i++) {
+      try {
+        const r = await fetch(u, { signal: AbortSignal.timeout(60000) });
+        await r.text();
+        console.log((r.status === 200 ? "已刷新缓存：" : "刷新没成功：") + u.split("/").pop());
+        done = true;
+      } catch (e) {
+        if (i === 3) console.log("刷新没成功：" + u.split("/").pop() + "（最长 12 小时后也会自动生效）");
+      }
+    }
+  }
+})();
+'@
+                node -e $purgeJs -- ($purgeList | ConvertTo-Json -Compress)
             }
         } else {
             "推送失败：连不上 GitHub。国内通常需要开着代理（Clash / v2ray 等）再推。"
