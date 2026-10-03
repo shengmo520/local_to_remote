@@ -31,6 +31,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 青竹 的安卓外壳：WebView 加载本地页面，纯本地运行。
@@ -343,14 +349,64 @@ public class MainActivity extends Activity {
         return b + name;
     }
 
+    /**
+     * 检查更新用的候选地址：内置地址优先，另外两个作为备用。
+     * CDN 对分支文件有最长 12 小时缓存，只问一个地址时可能一直拿到旧版本，导致手机端被告知「已经是最新」。
+     */
+    private List<String> updateSources(String base) {
+        LinkedHashSet<String> set = new LinkedHashSet<String>();
+        if (base != null && base.trim().length() > 0) set.add(base.trim());
+        set.add("https://fastly.jsdelivr.net/gh/shengmo520/qingzhu-plan@main/docs/");
+        set.add("https://raw.githubusercontent.com/shengmo520/qingzhu-plan/main/docs/");
+        return new ArrayList<String>(set);
+    }
+
+    /** 并发去问所有来源，取版本号最高的那一份；请求带上时间参数，绕过 CDN 的旧缓存 */
     private void doCheckUpdate(String base) {
-        try {
-            String body = new String(httpGetBytes(join(base, "update.json")), "UTF-8");
-            callJs("window.__updateInfo && window.__updateInfo(" + JSONObject.quote(body) + ", null)");
-        } catch (Exception e) {
-            callJs("window.__updateInfo && window.__updateInfo(null, "
-                    + JSONObject.quote(String.valueOf(e.getMessage())) + ")");
+        final List<String> sources = updateSources(base);
+        final CountDownLatch latch = new CountDownLatch(sources.size());
+        final List<String[]> got = Collections.synchronizedList(new ArrayList<String[]>());
+        for (final String src : sources) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        String url = join(src, "update.json") + "?t=" + System.currentTimeMillis();
+                        String body = new String(httpGetBytes(url), "UTF-8");
+                        JSONObject json = new JSONObject(body);
+                        long score = json.optLong("contentVersion", 0) * 1000L + json.optLong("versionCode", 0);
+                        got.add(new String[]{String.valueOf(score), body, src});
+                    } catch (Exception e) {
+                        // 单个来源连不上不影响其它来源
+                    } finally {
+                        latch.countDown();
+                    }
+                }
+            }).start();
         }
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try { latch.await(20, TimeUnit.SECONDS); } catch (Exception e) { }
+                String bestBody = null, bestBase = null;
+                long bestScore = -1;
+                synchronized (got) {
+                    for (String[] item : got) {
+                        long score = parseLong(item[0]);
+                        if (bestBody == null || score > bestScore) {
+                            bestScore = score;
+                            bestBody = item[1];
+                            bestBase = item[2];
+                        }
+                    }
+                }
+                if (bestBody != null) {
+                    callJs("window.__updateInfo && window.__updateInfo(" + JSONObject.quote(bestBody)
+                            + ", null, " + JSONObject.quote(bestBase) + ")");
+                } else {
+                    callJs("window.__updateInfo && window.__updateInfo(null, "
+                            + JSONObject.quote("网络连不上更新地址") + ", " + JSONObject.quote(base) + ")");
+                }
+            }
+        }).start();
     }
 
     private void doDownloadContent(String url, long version) {

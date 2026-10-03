@@ -584,7 +584,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   var TAB_INDEX = { goals: 0, today: 1, stats: 2 };
   var VIEW_IDS = ["view-goals", "view-today", "view-stats"];
   var CARD_TASK_LIMIT = 3;
-  var APP_VERSION = "v1.5";
+  var APP_VERSION = "v1.6";
   // 打包时会被替换成实际构建号，用来判断「手机上跑的页面到底是哪一版」
   var PAGE_BUILD = "__BUILD__";
   // 打包时会被替换成电脑的局域网更新地址，省得在手机上手动输入
@@ -2364,6 +2364,8 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   var updateCheckManual = false;
   var updateCheckTimer = null;
   var autoPromptedKey = "";
+  // 原生外壳可能给出多个更新地址里最快/最新的那一个，下载就用它
+  var updateBase = "";
   function checkUpdate(manual){
     var sh = nativeShell();
     var url = (state.settings.updateUrl || "").trim();
@@ -2381,7 +2383,7 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     return true;
   }
   function openUpdateSheet(info, needContent, needShell){
-    var base = (state.settings.updateUrl || "").trim();
+    var base = (updateBase || (state.settings.updateUrl || "")).trim();
     var notes = String(info.notes || "").replace(/\r/g, "");
     var mask = document.createElement("div");
     mask.className = "sheet-mask";
@@ -2416,8 +2418,9 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
       }
     });
   }
-  window.__updateInfo = function(body, err){
+  window.__updateInfo = function(body, err, base){
     var manual = updateCheckManual;
+    updateBase = (base ? String(base) : "").trim();
     updateCheckBusy = false;
     updateCheckManual = false;
     if(updateCheckTimer){ clearTimeout(updateCheckTimer); updateCheckTimer = null; }

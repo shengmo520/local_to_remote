@@ -2,8 +2,8 @@
 # 依赖：JDK 17 + Android build-tools 34 + platform android.jar（放在 $TC 下）
 param(
     [long]$ContentVersion = 0,        # 内容版本号，不传就用当前时间生成
-    [int]$ShellVersionCode = 2,
-    [string]$ShellVersionName = "1.5",
+    [int]$ShellVersionCode = 3,
+    [string]$ShellVersionName = "1.6",
     [string]$UpdateUrl = ""           # 内置到 APK 里的更新地址；留空则用本机局域网地址
 )
 $ErrorActionPreference = 'Stop'
