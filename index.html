@@ -617,6 +617,13 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
   function clamp01(n){ return Math.max(0, Math.min(1, n)); }
   function pad2(n){ return n < 10 ? "0" + n : "" + n; }
   function pctText(p){ return Math.round(p * 100) + "%"; }
+  // 数据里存的是 UTC 的 ISO 时间，显示一律换算成手机本地时间（直接截字符串会少 8 小时）
+  function fmtLocalDateTime(value){
+    var d = value ? new Date(value) : null;
+    if(!d || isNaN(d.getTime())) return "";
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+      " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
 
   /* ==================== 日期工具 ==================== */
   function dayKey(d){
@@ -1779,9 +1786,8 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
     var sh = shellInfo();
     var notifOK = notificationGranted();
     var contentVer = currentContentVersion();
-    var lastCheckText = state.settings.lastCheck
-      ? ("上次检查：" + state.settings.lastCheck.replace("T", " ").slice(0, 16))
-      : "还没有检查过更新";
+    var lastCheckLocal = fmtLocalDateTime(state.settings.lastCheck);
+    var lastCheckText = lastCheckLocal ? ("上次检查：" + lastCheckLocal) : "还没有检查过更新";
     var pageBuild = (PAGE_BUILD === "__BUILD__") ? "开发版" : PAGE_BUILD;
     return '<div class="screen-inner">' +
       '<div class="screen-head">' +
@@ -2753,6 +2759,18 @@ html[data-theme="dark"] .mini-toast{background:rgba(240,242,246,.95);color:#1416
       eq(d.getHours(), 21);
       eq(d.getMinutes(), 30);
       eq(parseDueAt("not-a-date"), null);
+    });
+    test("时间显示：按手机本地时间显示，而不是 UTC", function(){
+      var iso = "2026-10-03T13:02:00.000Z";
+      var d = new Date(iso);
+      var want = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) +
+        " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+      eq(fmtLocalDateTime(iso), want);
+      if(new Date().getTimezoneOffset() !== 0){
+        ok(fmtLocalDateTime(iso) !== iso.replace("T", " ").slice(0, 16), "不能直接截 UTC 字符串来显示");
+      }
+      eq(fmtLocalDateTime(""), "");
+      eq(fmtLocalDateTime("不是时间"), "");
     });
     test("滚动选择器：每月天数与闰年", function(){
       eq(daysInMonth(2026, 1), 31);
