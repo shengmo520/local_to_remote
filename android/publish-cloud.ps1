@@ -82,28 +82,40 @@ try {
             if ($UpdateUrl -like 'https://cdn.jsdelivr.net/*') {
                 $purgeBase = $UpdateUrl -replace '^https://cdn\.jsdelivr\.net/', 'https://purge.jsdelivr.net/'
                 $apkFile = (Get-Content (Join-Path $DOCS 'update.json') -Raw | ConvertFrom-Json).apk
-                $purgeList = @('update.json', 'index.html', 'download.html', $apkFile) |
-                    Where-Object { $_ } | ForEach-Object { $purgeBase + $_ }
-                # 用 node 发刷新请求：PowerShell 的 Invoke-RestMethod 在本机经常超时，刷新失败手机就要等最长 12 小时
+                $wantVersion = (Get-Content (Join-Path $DOCS 'update.json') -Raw | ConvertFrom-Json).contentVersion
+                $purgeFiles = @('update.json', 'index.html', 'download.html', $apkFile) | Where-Object { $_ }
+                # 用 node 反复「刷新 + 校验」：PowerShell 的 Invoke-RestMethod 在本机经常超时，
+                # 而缓存没刷新干净的话，手机那边会一直以为已经是最新，收不到更新
                 $purgeJs = @'
-const list = JSON.parse(process.argv[1]);
+const [purgeBase, plainBase, want] = [process.argv[1], process.argv[2], String(process.argv[3])];
+const files = JSON.parse(process.argv[4]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  for (const u of list) {
-    let done = false;
-    for (let i = 1; i <= 3 && !done; i++) {
-      try {
-        const r = await fetch(u, { signal: AbortSignal.timeout(60000) });
-        await r.text();
-        console.log((r.status === 200 ? "已刷新缓存：" : "刷新没成功：") + u.split("/").pop());
-        done = true;
-      } catch (e) {
-        if (i === 3) console.log("刷新没成功：" + u.split("/").pop() + "（最长 12 小时后也会自动生效）");
+  for (let round = 1; round <= 6; round++) {
+    for (const f of files) {
+      for (let i = 1; i <= 2; i++) {
+        try { await fetch(purgeBase + f, { signal: AbortSignal.timeout(60000) }); break; }
+        catch (e) { if (i === 2) console.log("刷新没成功：" + f); }
       }
     }
+    await sleep(6000);
+    try {
+      const r = await fetch(plainBase + "update.json?t=" + Date.now(), { cache: "no-store", signal: AbortSignal.timeout(30000) });
+      const got = String((await r.json()).contentVersion);
+      if (got === want) {
+        console.log("公网更新信息已生效（内容版本 " + got + "），手机下次检查就能拿到更新");
+        return;
+      }
+      console.log("第 " + round + " 次刷新后公网还是旧版本（" + got + "），继续刷新");
+    } catch (e) {
+      console.log("第 " + round + " 次校验失败：" + e.message);
+    }
+    await sleep(10000);
   }
+  console.log("公网更新信息还没生效，手机可能要等几分钟；确认网络后再跑一次本脚本即可");
 })();
 '@
-                node -e $purgeJs -- ($purgeList | ConvertTo-Json -Compress)
+                node -e $purgeJs -- $purgeBase $UpdateUrl $wantVersion ($purgeFiles | ConvertTo-Json -Compress)
             }
         } else {
             "推送失败：连不上 GitHub。国内通常需要开着代理（Clash / v2ray 等）再推。"
