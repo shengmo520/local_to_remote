@@ -59,17 +59,24 @@ try {
         "已提交到本地仓库"
     }
     if ($Push) {
-        # GitHub 在国内经常直连不上；如果本机有代理（Clash / v2ray 等）就自动走代理
-        $proxyArgs = @()
-        foreach ($p in @(7897, 7890, 7891, 7892, 10809, 10808, 2080, 1080)) {
-            if (netstat -ano | Select-String -Pattern ":$p\s+.*LISTENING") {
-                $proxyArgs = @('-c', "http.proxy=http://127.0.0.1:$p", '-c', "https.proxy=http://127.0.0.1:$p")
-                "检测到本机代理 127.0.0.1:$p，推送时使用它"
-                break
+        # 先直连试一次；直连不通再探测本机代理（Clash / v2ray 等）重试
+        git push $Remote $Branch
+        $pushed = ($LASTEXITCODE -eq 0)
+        if (-not $pushed) {
+            $proxyArgs = @()
+            foreach ($p in @(7897, 7890, 7891, 7892, 10809, 10808, 2080, 1080)) {
+                if (netstat -ano | Select-String -Pattern ":$p\s+.*LISTENING") {
+                    $proxyArgs = @('-c', "http.proxy=http://127.0.0.1:$p", '-c', "https.proxy=http://127.0.0.1:$p")
+                    "直连不通，检测到本机代理 127.0.0.1:$p，用代理再试一次"
+                    break
+                }
+            }
+            if ($proxyArgs.Count -gt 0) {
+                git @proxyArgs push $Remote $Branch
+                $pushed = ($LASTEXITCODE -eq 0)
             }
         }
-        git @proxyArgs push $Remote $Branch
-        if ($LASTEXITCODE -eq 0) {
+        if ($pushed) {
             "已推送到 $Remote/$Branch"
             # jsDelivr 对分支文件有最长 12 小时缓存，推完主动刷新，让更新立刻生效
             if ($UpdateUrl -like 'https://cdn.jsdelivr.net/*') {
